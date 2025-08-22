@@ -42,6 +42,7 @@ It will take a couple itterations through bootsel/port to get the coms stabalize
 #include <Fonts/FreeSerifBold9pt7b.h>
 
 void generateColorWheel();
+void setupLVGL();
 unsigned long testFillScreenOnce(int);
 unsigned long testText(uint8_t, uint8_t);
 unsigned long testLines(uint16_t);
@@ -144,9 +145,35 @@ void setup(void)
   height = gfx->height();
   half_width = width / 2;
   half_height = height / 2;
-  gfx->fillScreen(CYAN);
   bufSize = width * height / 2;
 
+  Serial.println("LV init.");
+  setupLVGL();
+
+  Serial.println("Setup done.");
+}
+
+void loop()
+{
+  lv_timer_handler(); /* let the GUI do its work */
+  delay(5);
+}
+
+/* Display flushing */
+void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
+{
+
+  Serial.println("Flushing buffer to display.");
+  uint32_t w = lv_area_get_width(area);
+  uint32_t h = lv_area_get_height(area);
+
+  gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)px_buf, w, h);
+
+  lv_disp_flush_ready(disp);
+}
+
+void setupLVGL()
+{
   lv_init();
 
   // Setup tick timer
@@ -160,7 +187,6 @@ void setup(void)
   // Register LVGL logging callback
   lv_log_register_print_cb(my_lvgl_log_cb);
 
-  Serial.println("LV init done.");
   disp = lv_display_create(SCREEN_WIDTH, SCREEN_HEIGHT);
   lv_display_set_flush_cb(disp, disp_flush);
   Serial.println("Display Created.");
@@ -194,9 +220,11 @@ void setup(void)
   lv_display_set_buffers(disp, disp_draw_buf, disp_draw_buf2, bufSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
   Serial.println("Display buffers set.");
 
+  ///////////////////////////
+  // Setup Screen Elements //
+  ///////////////////////////
 
-  // Setup Screen
-  /*Change the active screen's background color*/
+  // Set background color
   lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x004466), LV_PART_MAIN);
 
   /*Create a white label, set its text and align it to the center*/
@@ -204,27 +232,6 @@ void setup(void)
   lv_label_set_text(label, "Hello world");
   lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0xffffff), LV_PART_MAIN);
   lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-
-  Serial.println("Setup done");
-}
-
-void loop()
-{
-  lv_timer_handler(); /* let the GUI do its work */
-  delay(5);
-}
-
-/* Display flushing */
-void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
-{
-
-  Serial.println("Flushing buffer to display.");
-  uint32_t w = lv_area_get_width(area);
-  uint32_t h = lv_area_get_height(area);
-
-  gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)px_buf, w, h);
-
-  lv_disp_flush_ready(disp);
 }
 
 void runBenchmark(void)
