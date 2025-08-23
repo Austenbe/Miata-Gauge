@@ -43,6 +43,7 @@ It will take a couple itterations through bootsel/port to get the coms stabalize
 
 void generateColorWheel();
 void setupLVGL();
+void requestData();
 unsigned long testFillScreenOnce(int);
 unsigned long testText(uint8_t, uint8_t);
 unsigned long testLines(uint16_t);
@@ -118,6 +119,13 @@ void lv_tick_task(void *arg)
 void setup(void)
 {
   Serial.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, A0, A1);
+  //pinMode(A1, OUTPUT);
+  //digitalWrite(A1, HIGH); // Power on the external device
+
+  while (!Serial){
+    delay(10);
+  }
 
   delay(500);
   rotation = 0;
@@ -149,12 +157,17 @@ void setup(void)
   setupLVGL();
 
   Serial.println("Setup done.");
+
+  Serial.println("Requesting Data...");
+  requestData();
+
 }
 
 void loop()
 {
   lv_timer_handler(); /* let the GUI do its work */
-  delay(5);
+  delay(500);
+  requestData();
 }
 
 /* Display flushing */
@@ -168,6 +181,46 @@ void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
   gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)px_buf, w, h);
 
   lv_disp_flush_ready(disp);
+}
+
+void requestData()
+{
+  int timeout = 1000; // ms
+  uint8_t buffer[256];
+  Serial2.setTimeout(timeout);
+
+  // flush input buffer
+  uint32_t sendTime = millis();
+  Serial2.write('n');
+
+  // wait for data or timeout
+  uint32_t start = millis();
+  uint32_t end = start;
+  while (Serial2.available() < 3 && (end - start) < timeout)
+  {
+    end = millis();
+  }
+
+  // if within timeout, read data
+  if (end - start < timeout)
+  {
+    Serial.print("Recieved in: "); Serial.println(end - sendTime);
+    Serial.print("Recieved in without write: "); Serial.println(end - start);
+    // skip first two bytes
+    Serial2.read(); // 'n'
+    Serial2.read(); // 0x32
+    uint8_t dataLen = Serial2.read();
+    Serial.println("Data length: " + String(dataLen));
+    Serial2.readBytes(buffer, dataLen);
+
+    //Print data
+    Serial.print("secL: "); Serial.println(buffer[0]);
+    Serial.print("Baro: "); Serial.println(buffer[40]);
+  }
+  else{
+    Serial.println("Timeout exceeded.");
+  }
+
 }
 
 void setupLVGL()
