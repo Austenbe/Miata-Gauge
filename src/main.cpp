@@ -74,7 +74,7 @@ Arduino_ESP32RGBPanel *rgbpanel = new Arduino_ESP32RGBPanel(
     TFT_G0, TFT_G1, TFT_G2, TFT_G3, TFT_G4, TFT_G5,
     TFT_B1, TFT_B2, TFT_B3, TFT_B4, TFT_B5,
     1 /* hync_polarity */, 46 /* hsync_front_porch */, 2 /* hsync_pulse_width */, 44 /* hsync_back_porch */,
-    1 /* vsync_polarity */, 50 /* vsync_front_porch */, 2 /* vsync_pulse_width */, 16 /* vsync_back_porch */,
+    1 /* vsync_polarity */, 50 /* vsync_front_porch */, 16 /* vsync_pulse_width */, 16 /* vsync_back_porch */,
     1, 35000000L /* DCLK */
 );
 
@@ -118,8 +118,6 @@ void lv_tick_task(void *arg)
 void setup(void)
 {
   Serial.begin(115200);
-  while (!Serial)
-    delay(100);
 
   delay(500);
   rotation = 0;
@@ -223,15 +221,46 @@ void setupLVGL()
   ///////////////////////////
   // Setup Screen Elements //
   ///////////////////////////
+  #define LOCATE
 
+  #ifdef LOCATE
   // Set background color
-  lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x004466), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(lv_screen_active(), lv_palette_main(LV_PALETTE_AMBER), LV_PART_MAIN);
 
-  /*Create a white label, set its text and align it to the center*/
-  lv_obj_t *label = lv_label_create(lv_screen_active());
-  lv_label_set_text(label, "Hello world");
-  lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0xffffff), LV_PART_MAIN);
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+  // Cross position variables
+  static int cross_x = 360;
+  static int cross_y = 360;
+
+  // Horizontal scale
+  lv_obj_t *h_scale = lv_scale_create(lv_screen_active());
+  lv_obj_set_size(h_scale, 720, 60);
+  lv_scale_set_mode(h_scale, LV_SCALE_MODE_HORIZONTAL_BOTTOM);
+  lv_obj_set_style_bg_color(h_scale, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(h_scale, LV_ALIGN_TOP_LEFT, 0, cross_y);
+  lv_scale_set_label_show(h_scale, true);
+  lv_scale_set_total_tick_count(h_scale, 25); // 700/50 = 14 intervals, 15 ticks
+  lv_scale_set_major_tick_every(h_scale, 1); // every tick is major
+  lv_obj_set_style_length(h_scale, 5, LV_PART_ITEMS);
+  lv_obj_set_style_length(h_scale, 10, LV_PART_INDICATOR);
+  lv_scale_set_range(h_scale, 0, 720);
+
+  // Vertical scale
+  lv_obj_t *v_scale = lv_scale_create(lv_screen_active());
+  lv_obj_set_size(v_scale, 60, 720);
+  lv_scale_set_mode(v_scale, LV_SCALE_MODE_VERTICAL_RIGHT);
+  lv_obj_set_style_bg_color(v_scale, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(v_scale, LV_ALIGN_TOP_LEFT, cross_x, 0);
+  lv_scale_set_label_show(v_scale, true);
+  lv_scale_set_total_tick_count(v_scale, 25); // 700/50 = 14 intervals, 15 ticks
+  lv_scale_set_major_tick_every(v_scale, 1);
+  lv_obj_set_style_length(v_scale, 5, LV_PART_ITEMS);
+  lv_obj_set_style_length(v_scale, 10, LV_PART_INDICATOR);
+  lv_scale_set_range(v_scale, 720, 0);
+  
+  #else
+  
+
+  #endif // LOCATE
 }
 
 void runBenchmark(void)
