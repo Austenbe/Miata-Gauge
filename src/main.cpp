@@ -97,6 +97,15 @@ uint32_t bufSize;
 #define TEXT_X 200
 #define TEXT_Y 150
 
+volatile bool pending_response = false;
+bool start_recvd = false;
+const int response_size = 123;
+int data_recived = 0;
+uint8_t buffer[response_size];
+unsigned long last_request_time = 0;
+
+lv_obj_t *label1;
+char label1Text[32];
 uint16_t *colorWheel;
 int width;
 int height;
@@ -116,25 +125,36 @@ void lv_tick_task(void *arg)
   lv_tick_inc(1);
 }
 
+void data_request_timer_task(void *pvParameters)
+{
+  while (1)
+  {
+    Serial2.write('n'); // Send data request command to speeduino
+    last_request_time = millis();
+    pending_response = true;
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1000 ms
+  }
+}
+
 void setup(void)
 {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, A0, A1);
-  //pinMode(A1, OUTPUT);
-  //digitalWrite(A1, HIGH); // Power on the external device
+  Serial2.setTimeout(5);
 
-  while (!Serial){
+  while (!Serial)
+  {
     delay(10);
   }
+
+  // Setup data request task
+  xTaskCreatePinnedToCore(data_request_timer_task, "DataTask", 1000, NULL, 1, NULL, 0);
 
   delay(500);
   rotation = 0;
 #ifdef GFX_EXTRA_PRE_INIT
   GFX_EXTRA_PRE_INIT();
 #endif
-
-  Serial.println("Beginning");
-  // Init Display
 
   Wire.setClock(1000000); // speed up I2C
   Serial.println("Initialize gfx->");
@@ -157,24 +177,51 @@ void setup(void)
   setupLVGL();
 
   Serial.println("Setup done.");
-
-  Serial.println("Requesting Data...");
-  requestData();
-
 }
 
 void loop()
 {
+  if (pending_response)
+  {
+    if (last_request_time - millis() > 20)
+    {
+      pending_response = false;
+    }
+    int bytes_available = Serial2.available();
+    if (bytes_available >= 3)
+    {
+      // skip first two bytes and data length
+      if (!start_recvd)
+      {
+        Serial2.read(); // 'n'
+        Serial2.read(); // 0x32
+        Serial2.read(); // dataLen
+        bytes_available -= 3;
+      }
+      for (int i = 0; i < bytes_available; i++)
+      {
+        buffer[data_recived + i] = Serial2.read();
+      }
+      data_recived += bytes_available;
+      // Data has been received
+      if (data_recived >= response_size)
+      {
+        data_recived = 0;
+        pending_response = false;
+        snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
+        lv_label_set_text(label1, label1Text);
+      }
+    }
+  }
+
   lv_timer_handler(); /* let the GUI do its work */
-  delay(500);
-  requestData();
+  delay(5);
 }
 
 /* Display flushing */
 void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
 {
 
-  Serial.println("Flushing buffer to display.");
   uint32_t w = lv_area_get_width(area);
   uint32_t h = lv_area_get_height(area);
 
@@ -185,9 +232,8 @@ void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
 
 void requestData()
 {
-  int timeout = 1000; // ms
+  int timeout = 20; // ms
   uint8_t buffer[256];
-  Serial2.setTimeout(timeout);
 
   // flush input buffer
   uint32_t sendTime = millis();
@@ -204,8 +250,10 @@ void requestData()
   // if within timeout, read data
   if (end - start < timeout)
   {
-    Serial.print("Recieved in: "); Serial.println(end - sendTime);
-    Serial.print("Recieved in without write: "); Serial.println(end - start);
+    Serial.print("Recieved in: ");
+    Serial.println(end - sendTime);
+    Serial.print("Recieved in without write: ");
+    Serial.println(end - start);
     // skip first two bytes
     Serial2.read(); // 'n'
     Serial2.read(); // 0x32
@@ -213,14 +261,17 @@ void requestData()
     Serial.println("Data length: " + String(dataLen));
     Serial2.readBytes(buffer, dataLen);
 
-    //Print data
-    Serial.print("secL: "); Serial.println(buffer[0]);
-    Serial.print("Baro: "); Serial.println(buffer[40]);
+    // Print data
+    Serial.print("secL: ");
+    Serial.println(buffer[0]);
+    Serial.print("Baro: ");
+    Serial.println(buffer[40]);
   }
-  else{
-    Serial.println("Timeout exceeded.");
+  else
+  {
+    Serial.print("Timeout exceeded. Took: ");
+    Serial.println(end - start);
   }
-
 }
 
 void setupLVGL()
@@ -274,11 +325,12 @@ void setupLVGL()
   ///////////////////////////
   // Setup Screen Elements //
   ///////////////////////////
-  #define LOCATE
-
-  #ifdef LOCATE
-  // Set background color
+  //Set background color
   lv_obj_set_style_bg_color(lv_screen_active(), lv_palette_main(LV_PALETTE_AMBER), LV_PART_MAIN);
+
+  // #define LOCATE
+
+#ifdef LOCATE
 
   // Cross position variables
   static int cross_x = 360;
@@ -292,7 +344,7 @@ void setupLVGL()
   lv_obj_align(h_scale, LV_ALIGN_TOP_LEFT, 0, cross_y);
   lv_scale_set_label_show(h_scale, true);
   lv_scale_set_total_tick_count(h_scale, 25); // 700/50 = 14 intervals, 15 ticks
-  lv_scale_set_major_tick_every(h_scale, 1); // every tick is major
+  lv_scale_set_major_tick_every(h_scale, 1);  // every tick is major
   lv_obj_set_style_length(h_scale, 5, LV_PART_ITEMS);
   lv_obj_set_style_length(h_scale, 10, LV_PART_INDICATOR);
   lv_scale_set_range(h_scale, 0, 720);
@@ -309,11 +361,14 @@ void setupLVGL()
   lv_obj_set_style_length(v_scale, 5, LV_PART_ITEMS);
   lv_obj_set_style_length(v_scale, 10, LV_PART_INDICATOR);
   lv_scale_set_range(v_scale, 720, 0);
-  
-  #else
-  
 
-  #endif // LOCATE
+#else
+  /*Create a white label, set its text and align it to the center*/
+  label1 = lv_label_create(lv_screen_active());
+  lv_label_set_text(label1, "Hello world");
+  lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0xffffff), LV_PART_MAIN);
+  lv_obj_align(label1, LV_ALIGN_CENTER, 0, 0);
+#endif // LOCATE
 }
 
 void runBenchmark(void)
