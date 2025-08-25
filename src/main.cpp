@@ -162,6 +162,7 @@ void loop()
         Serial2.read(); // 0x32
         Serial2.read(); // dataLen
         bytes_available -= 3;
+        start_recvd = true;
       }
       for (int i = 0; i < bytes_available; i++)
       {
@@ -173,6 +174,7 @@ void loop()
       {
         data_recived = 0;
         pending_response = false;
+        start_recvd = false;
         snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
         lv_label_set_text(label1, label1Text);
       }
