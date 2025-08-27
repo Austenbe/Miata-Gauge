@@ -46,6 +46,8 @@ void requestData();
 void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf);
 void lv_tick_task(void *arg);
 void data_request_timer_task(void *pvParameters);
+void display_update_task(void *pvParameters);
+void data_recieve_task(void *pvParameters);
 void my_lvgl_log_cb(lv_log_level_t level, const char *buf);
 
 #define SCREEN_WIDTH 720
@@ -79,12 +81,11 @@ uint32_t bufSize;
  * End of Arduino_GFX setting
  ******************************************************************************/
 
-#define TEST_DELAY 500
-#define FILL_WAIT 400
-#define TEXT_X 200
-#define TEXT_Y 150
+#define CENTER_X 360
+#define CENTER_Y 360
 
-volatile bool pending_response = false;
+#define DATA_REQUEST_INTERVAL 1000 // ms
+bool pending_response = false;
 bool start_recvd = false;
 const int response_size = 123;
 int data_recived = 0;
@@ -98,30 +99,33 @@ int width;
 int height;
 int half_width;
 int half_height;
-uint8_t rotation;
-
 
 void setup(void)
 {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, A0, A1);
   Serial2.setTimeout(5);
+  Wire.setClock(1000000); // speed up I2C
 
   while (!Serial)
   {
     delay(10);
   }
 
+  Serial.println("Hello");
   // Setup data request task
-  xTaskCreatePinnedToCore(data_request_timer_task, "DataTask", 1000, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 512, NULL, 1, NULL, 0);
+  Serial.println("Created task 1");
 
+  // Create Screen task
+  //xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 2, NULL, 1);
+  Serial.println("Created task 2");
   delay(500);
-  rotation = 0;
+
 #ifdef GFX_EXTRA_PRE_INIT
   GFX_EXTRA_PRE_INIT();
 #endif
 
-  Wire.setClock(1000000); // speed up I2C
   Serial.println("Initialize gfx->");
   if (!gfx->begin())
   {
@@ -146,43 +150,7 @@ void setup(void)
 
 void loop()
 {
-  if (pending_response)
-  {
-    if (last_request_time - millis() > 20)
-    {
-      pending_response = false;
-    }
-    int bytes_available = Serial2.available();
-    if (bytes_available >= 3)
-    {
-      // skip first two bytes and data length
-      if (!start_recvd)
-      {
-        Serial2.read(); // 'n'
-        Serial2.read(); // 0x32
-        Serial2.read(); // dataLen
-        bytes_available -= 3;
-        start_recvd = true;
-      }
-      for (int i = 0; i < bytes_available; i++)
-      {
-        buffer[data_recived + i] = Serial2.read();
-      }
-      data_recived += bytes_available;
-      // Data has been received
-      if (data_recived >= response_size)
-      {
-        data_recived = 0;
-        pending_response = false;
-        start_recvd = false;
-        snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
-        lv_label_set_text(label1, label1Text);
-      }
-    }
-  }
 
-  lv_timer_handler(); /* let the GUI do its work */
-  delay(5);
 }
 
 void requestData()
@@ -280,7 +248,7 @@ void setupLVGL()
   ///////////////////////////
   // Setup Screen Elements //
   ///////////////////////////
-  //Set background color
+  // Set background color
   lv_obj_set_style_bg_color(lv_screen_active(), lv_palette_main(LV_PALETTE_AMBER), LV_PART_MAIN);
 
   // #define LOCATE
@@ -330,10 +298,94 @@ void data_request_timer_task(void *pvParameters)
 {
   while (1)
   {
-    Serial2.write('n'); // Send data request command to speeduino
-    last_request_time = millis();
-    pending_response = true;
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1000 ms
+    if (!pending_response)
+    {
+      Serial2.write('n'); // Send data request command to speeduino
+      last_request_time = millis();
+      pending_response = true;
+      vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to allow response to start coming in
+    }
+    int bytes_available = Serial2.available();
+    if (bytes_available >= 3)
+    {
+      // skip first two bytes and data length
+      if (!start_recvd)
+      {
+        Serial2.read(); // 'n'
+        Serial2.read(); // 0x32
+        Serial2.read(); // dataLen
+        bytes_available -= 3;
+        start_recvd = true;
+      }
+      for (int i = 0; i < bytes_available; i++)
+      {
+        buffer[data_recived + i] = Serial2.read();
+      }
+      data_recived += bytes_available;
+      // Data has been received
+      if (data_recived >= response_size)
+      {
+        data_recived = 0;
+        pending_response = false;
+        start_recvd = false;
+        snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
+        lv_label_set_text(label1, label1Text);
+        vTaskDelay(pdMS_TO_TICKS(DATA_REQUEST_INTERVAL)); // Delay for 1000 ms
+      }
+      else {
+        vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to wait for more data
+      }
+    }
+    else {
+      vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to wait for more data
+    }
+  }
+}
+
+void data_recieve_task(void *pvParameters)
+{
+  while (1)
+  {
+    if (pending_response)
+    {
+      int bytes_available = Serial2.available();
+      if (bytes_available >= 3)
+      {
+        // skip first two bytes and data length
+        if (!start_recvd)
+        {
+          Serial2.read(); // 'n'
+          Serial2.read(); // 0x32
+          Serial2.read(); // dataLen
+          bytes_available -= 3;
+          start_recvd = true;
+        }
+        for (int i = 0; i < bytes_available; i++)
+        {
+          buffer[data_recived + i] = Serial2.read();
+        }
+        data_recived += bytes_available;
+        // Data has been received
+        if (data_recived >= response_size)
+        {
+          data_recived = 0;
+          pending_response = false;
+          start_recvd = false;
+          snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
+          lv_label_set_text(label1, label1Text);
+        }
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(5)); // Delay for 5 ms to yield to other tasks
+  }
+}
+
+void display_update_task(void *pvParameters)
+{
+  while (1)
+  {
+    lv_timer_handler();           /* let the GUI do its work */
+    vTaskDelay(pdMS_TO_TICKS(5)); // Delay for 1000 ms
   }
 }
 
