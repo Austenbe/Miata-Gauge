@@ -47,7 +47,7 @@ void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf);
 void lv_tick_task(void *arg);
 void data_request_timer_task(void *pvParameters);
 void display_update_task(void *pvParameters);
-void data_recieve_task(void *pvParameters);
+void test_task(void *pvParameters);
 void my_lvgl_log_cb(lv_log_level_t level, const char *buf);
 
 #define SCREEN_WIDTH 720
@@ -83,6 +83,8 @@ uint32_t bufSize;
 
 #define CENTER_X 360
 #define CENTER_Y 360
+
+#define TESTING
 
 TaskHandle_t displayTaskHandle;
 TaskHandle_t serialTaskHandle;
@@ -146,7 +148,11 @@ void setup(void)
 
 
   // Setup data request task
-  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 2046, NULL, 1, &serialTaskHandle, 0);
+  #ifdef TESTING
+  xTaskCreatePinnedToCore(test_task, "testTask", 2048, NULL, 1, &serialTaskHandle, 0);
+  #else
+  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 2048, NULL, 1, &serialTaskHandle, 0);
+  #endif
   Serial.println("Created data request task.");
 
 
@@ -157,7 +163,6 @@ void loop()
 {
 
 }
-
 
 void setupLVGL()
 {
@@ -356,3 +361,16 @@ void my_lvgl_log_cb(lv_log_level_t level, const char *buf)
   Serial.print("[LVGL] ");
   Serial.println(buf);
 }
+
+#ifdef TESTING
+void test_task(void *pvParameters)
+{
+  uint8_t time = 0;
+  while (1)
+  {
+    snprintf(label1Text, sizeof(label1Text), "Time: %d", time++);
+    xTaskNotify(displayTaskHandle, 1, eSetValueWithOverwrite);
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
+  }
+}
+#endif
