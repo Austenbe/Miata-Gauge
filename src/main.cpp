@@ -112,15 +112,8 @@ void setup(void)
     delay(10);
   }
 
-  Serial.println("Hello");
-  // Setup data request task
-  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 512, NULL, 1, NULL, 0);
-  Serial.println("Created task 1");
 
-  // Create Screen task
-  //xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 2, NULL, 1);
-  Serial.println("Created task 2");
-  delay(500);
+  delay(100);
 
 #ifdef GFX_EXTRA_PRE_INIT
   GFX_EXTRA_PRE_INIT();
@@ -144,6 +137,17 @@ void setup(void)
 
   Serial.println("LV init.");
   setupLVGL();
+
+
+  // Create Screen task
+  xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 2, NULL, 1);
+  Serial.println("Created Screen update task.");
+
+
+  // Setup data request task
+  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 512, NULL, 1, NULL, 0);
+  Serial.println("Created data request task.");
+
 
   Serial.println("Setup done.");
 }
