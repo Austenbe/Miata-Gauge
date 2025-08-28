@@ -78,14 +78,15 @@ lv_color_t *disp_draw_buf2;
 uint32_t bufSize;
 
 /*******************************************************************************
- * End of Arduino_GFX setting
+ * End of Arduino_GFX and LVGL setting
  ******************************************************************************/
 
 #define CENTER_X 360
 #define CENTER_Y 360
 
+TaskHandle_t displayTaskHandle;
+TaskHandle_t serialTaskHandle;
 #define DATA_REQUEST_INTERVAL 1000 // ms
-volatile bool gui_update_required = false;
 bool pending_response = false;
 bool start_recvd = false;
 const int response_size = 123;
@@ -140,12 +141,12 @@ void setup(void)
 
 
   // Create Screen task
-  xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 4, NULL, 1);
+  xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 4, &displayTaskHandle, 1);
   Serial.println("Created Screen update task.");
 
 
   // Setup data request task
-  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 2046, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 2046, NULL, 1, &serialTaskHandle, 0);
   Serial.println("Created data request task.");
 
 
@@ -269,7 +270,6 @@ void data_request_timer_task(void *pvParameters)
     }
     else if (millis() - last_request_time > 500)
     {
-      Serial.println("Timeout waiting for response.");
       pending_response = false;
       data_recived = 0;
       start_recvd = false;
@@ -305,7 +305,8 @@ void data_request_timer_task(void *pvParameters)
         pending_response = false;
         start_recvd = false;
         snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
-        //gui_update_required = true;
+        // Notify the display task to update the GUI
+        xTaskNotify(displayTaskHandle, 1, eSetValueWithOverwrite);
         vTaskDelay(pdMS_TO_TICKS(DATA_REQUEST_INTERVAL)); // Delay for 1000 ms
         continue;
       }
@@ -318,22 +319,24 @@ void data_request_timer_task(void *pvParameters)
 
 void display_update_task(void *pvParameters)
 {
+  uint32_t notifiedValue = 0;
   while (1)
   {
     lv_timer_handler();           /* let the GUI do its work */
-    if (gui_update_required)
+    // Check for notification
+    if (xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, 0) == pdTRUE)
     {
       lv_label_set_text_static(label1, label1Text);
-      gui_update_required = false;
+      vTaskDelay(pdMS_TO_TICKS(4));
       continue;
     }
+    
     vTaskDelay(pdMS_TO_TICKS(5)); // Delay for 5 ms
   }
 }
 
 void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf)
 {
-
   uint32_t w = lv_area_get_width(area);
   uint32_t h = lv_area_get_height(area);
 
