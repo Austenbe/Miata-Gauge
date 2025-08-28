@@ -41,6 +41,24 @@ It will take a couple itterations through bootsel/port to get the coms stabalize
 #include <Fonts/FreeSerifBold12pt7b.h>
 #include <Fonts/FreeSerifBold9pt7b.h>
 
+typedef struct _objects_t
+{
+  lv_obj_t *screen;
+  lv_obj_t *label;
+  lv_obj_t *label_rpm;
+  lv_obj_t *led0;
+  lv_obj_t *led1;
+  lv_obj_t *led2;
+  lv_obj_t *led3;
+  lv_obj_t *led4;
+  lv_obj_t *led5;
+  lv_obj_t *led6;
+  lv_obj_t *led7;
+  lv_obj_t *led8;
+  lv_obj_t *led9;
+  lv_obj_t *led10;
+} objects_t;
+
 void setupLVGL();
 void requestData();
 void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_buf);
@@ -73,6 +91,7 @@ Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
     expander, GFX_NOT_DEFINED /* RST */, hd40015c40_init_operations, sizeof(hd40015c40_init_operations));
 
 lv_display_t *disp;
+objects_t objects;
 uint8_t *disp_draw_buf;
 uint8_t *disp_draw_buf2;
 uint32_t screen_size = SCREEN_WIDTH * SCREEN_HEIGHT;
@@ -97,12 +116,10 @@ int data_recived = 0;
 uint8_t buffer[response_size];
 unsigned long last_request_time = 0;
 
-lv_obj_t *label1;
+// UI data variables
 char label1Text[32];
-int width;
-int height;
-int half_width;
-int half_height;
+uint16_t rpm = 0;
+
 
 void setup(void)
 {
@@ -210,8 +227,9 @@ void setupLVGL()
   ///////////////////////////
   // Setup Screen Elements //
   ///////////////////////////
+  objects.screen = lv_screen_active();
   // Set background color
-  lv_obj_set_style_bg_color(lv_screen_active(), lv_palette_main(LV_PALETTE_AMBER), LV_PART_MAIN);
+  lv_obj_set_style_bg_color(objects.screen, lv_color_hex(0xff171b18), LV_PART_MAIN);
 
   // #define LOCATE
 
@@ -250,12 +268,107 @@ void setupLVGL()
 #else
 
   /*Create a white label, set its text and align it to the center*/
-  label1 = lv_label_create(lv_screen_active());
-  lv_label_set_text(label1, "Hello world");
-  lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0xffffff), LV_PART_MAIN);
-  lv_obj_align(label1, LV_ALIGN_CENTER, 0, 0);
-#endif // LOCATE
+  objects.label = lv_label_create(objects.screen);
+  lv_label_set_text(objects.label, "Hello world");
+  lv_obj_set_style_text_color(objects.screen, lv_color_hex(0xffffff), LV_PART_MAIN);
+  lv_obj_align(objects.label, LV_ALIGN_CENTER, 0, 0);
 
+    /*Create a white label, set its text and align it to the center*/
+  objects.label_rpm = lv_label_create(objects.screen);
+  lv_label_set_text(objects.label, "rpm");
+  lv_obj_set_style_text_color(objects.screen, lv_color_hex(0xffffff), LV_PART_MAIN);
+  lv_obj_align(objects.label, LV_ALIGN_CENTER, 0, -100);
+
+  // Create LED ring
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 126, 113);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_brightness(obj, 80);
+    objects.led0 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 555, 113);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_brightness(obj, 80);
+    objects.led1 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 158, 82);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_brightness(obj, 80);
+    objects.led2 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 523, 82);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_brightness(obj, 80);
+    objects.led3 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 244, 34);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_brightness(obj, 80);
+    objects.led4 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 437, 34);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_brightness(obj, 80);
+    objects.led5 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 481, 55);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_brightness(obj, 80);
+    objects.led6 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 198, 55);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_brightness(obj, 80);
+    objects.led7 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 341, 16);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffff0000));
+    lv_led_set_brightness(obj, 80);
+    objects.led8 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 389, 23);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffff0000));
+    lv_led_set_brightness(obj, 80);
+    objects.led9 = obj;
+  }
+  {
+    lv_obj_t *obj = lv_led_create(objects.screen);
+    lv_obj_set_pos(obj, 292, 23);
+    lv_obj_set_size(obj, 32, 32);
+    lv_led_set_color(obj, lv_color_hex(0xffff0000));
+    lv_led_set_brightness(obj, 80);
+    objects.led10 = obj;
+  }
+#endif // LOCATE
 }
 
 // Make a request for data, response time is 25 ms currently
@@ -329,7 +442,8 @@ void display_update_task(void *pvParameters)
     // Check for notification
     if (xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, 0) == pdTRUE)
     {
-      lv_label_set_text_static(label1, label1Text);
+      lv_label_set_text_fmt(objects.label_rpm, "%d", rpm);
+      lv_label_set_text_static(objects.label, label1Text);
       vTaskDelay(pdMS_TO_TICKS(4));
       continue;
     }
@@ -364,8 +478,18 @@ void my_lvgl_log_cb(lv_log_level_t level, const char *buf)
 void test_task(void *pvParameters)
 {
   uint8_t time = 0;
+  bool rpmDir = true;
   while (1)
   {
+    if (rpm >= 7000)
+    {
+      rpmDir = false;
+    }
+    else if (rpm <= 0)
+    {
+      rpmDir = true;
+    }
+    rpm = rpmDir ? rpm + 100 : rpm - 100;
     snprintf(label1Text, sizeof(label1Text), "Time: %d", time++);
     xTaskNotify(displayTaskHandle, 1, eSetValueWithOverwrite);
     vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
