@@ -145,7 +145,7 @@ void setup(void)
 
 
   // Setup data request task
-  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 512, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 2046, NULL, 1, NULL, 0);
   Serial.println("Created data request task.");
 
 
@@ -309,7 +309,19 @@ void data_request_timer_task(void *pvParameters)
       pending_response = true;
       vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to allow response to start coming in
     }
+    // Check if waiting too long for response
+    if (millis() - last_request_time > 500)
+    {
+      Serial.println("Timeout waiting for response.");
+      pending_response = false;
+      data_recived = 0;
+      start_recvd = false;
+      last_request_time = 0;
+      vTaskDelay(pdMS_TO_TICKS(DATA_REQUEST_INTERVAL)); // Delay for 1000 ms
+      continue;
+    }
     int bytes_available = Serial2.available();
+    // Recieve as much data as possible
     if (bytes_available >= 3)
     {
       // skip first two bytes and data length
@@ -326,7 +338,7 @@ void data_request_timer_task(void *pvParameters)
         buffer[data_recived + i] = Serial2.read();
       }
       data_recived += bytes_available;
-      // Data has been received
+      // All Data has been received
       if (data_recived >= response_size)
       {
         data_recived = 0;
@@ -335,14 +347,10 @@ void data_request_timer_task(void *pvParameters)
         snprintf(label1Text, sizeof(label1Text), "Time: %d", buffer[0]);
         lv_label_set_text(label1, label1Text);
         vTaskDelay(pdMS_TO_TICKS(DATA_REQUEST_INTERVAL)); // Delay for 1000 ms
-      }
-      else {
-        vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to wait for more data
+        continue;
       }
     }
-    else {
-      vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to wait for more data
-    }
+    vTaskDelay(pdMS_TO_TICKS(2)); // Delay for 2 ms to wait for more data
   }
 }
 
