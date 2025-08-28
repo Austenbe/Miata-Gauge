@@ -65,7 +65,7 @@ Arduino_ESP32RGBPanel *rgbpanel = new Arduino_ESP32RGBPanel(
     TFT_B1, TFT_B2, TFT_B3, TFT_B4, TFT_B5,
     1 /* hync_polarity */, 46 /* hsync_front_porch */, 2 /* hsync_pulse_width */, 44 /* hsync_back_porch */,
     1 /* vsync_polarity */, 50 /* vsync_front_porch */, 16 /* vsync_pulse_width */, 16 /* vsync_back_porch */,
-    1, 35000000L /* DCLK */
+    1, 12000000L /* DCLK */
 );
 
 Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
@@ -73,9 +73,10 @@ Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
     expander, GFX_NOT_DEFINED /* RST */, hd40015c40_init_operations, sizeof(hd40015c40_init_operations));
 
 lv_display_t *disp;
-lv_color_t *disp_draw_buf;
-lv_color_t *disp_draw_buf2;
-uint32_t bufSize;
+uint8_t *disp_draw_buf;
+uint8_t *disp_draw_buf2;
+uint32_t screen_size = SCREEN_WIDTH * SCREEN_HEIGHT;
+uint32_t bufSize = screen_size * 2; // size of the display buffer in pixels
 
 /*******************************************************************************
  * End of Arduino_GFX and LVGL setting
@@ -115,7 +116,6 @@ void setup(void)
     delay(10);
   }
 
-
   delay(100);
 
 #ifdef GFX_EXTRA_PRE_INIT
@@ -131,37 +131,31 @@ void setup(void)
   {
     Serial.println("RoundMode enabled.");
   }
-  // Set global reused values once to not to make so many function calls
-  width = gfx->width();
-  height = gfx->height();
-  half_width = width / 2;
-  half_height = height / 2;
-  bufSize = width * height / 2;
 
   Serial.println("LV init.");
   setupLVGL();
 
+  printf("LVGL stride = %d\n", lv_display_get_horizontal_resolution(disp));
+  printf("LVGL height = %d\n", lv_display_get_vertical_resolution(disp));
+  printf("Buf size = %d\n", bufSize);
 
   // Create Screen task
   xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 4, &displayTaskHandle, 1);
   Serial.println("Created Screen update task.");
 
-
-  // Setup data request task
-  #ifdef TESTING
+// Setup data request task
+#ifdef TESTING
   xTaskCreatePinnedToCore(test_task, "testTask", 2048, NULL, 1, &serialTaskHandle, 0);
-  #else
+#else
   xTaskCreatePinnedToCore(data_request_timer_task, "serialTask", 2048, NULL, 1, &serialTaskHandle, 0);
-  #endif
+#endif
   Serial.println("Created data request task.");
-
 
   Serial.println("Setup done.");
 }
 
 void loop()
 {
-
 }
 
 void setupLVGL()
@@ -184,32 +178,33 @@ void setupLVGL()
   Serial.println("Display Created.");
 
   // Allocate the display buffer
-  disp_draw_buf = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  disp_draw_buf = (uint8_t *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  // disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!disp_draw_buf)
   {
     // remove MALLOC_CAP_INTERNAL flag try again
-    disp_draw_buf = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_8BIT);
+    disp_draw_buf = (uint8_t *)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT);
   }
   if (!disp_draw_buf)
   {
     Serial.println("LVGL disp_draw_buf allocate failed!");
     return;
   }
+  /*
   if (!disp_draw_buf2)
   {
     // remove MALLOC_CAP_INTERNAL flag try again
-    disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_8BIT);
+    disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(bufSize * sizeof(lv_color_t), MALLOC_CAP_8BIT);
   }
   if (!disp_draw_buf2)
   {
     Serial.println("LVGL disp_draw_buf2 allocate failed!");
     return;
   }
-
+  */
   Serial.println("Display buffers allocated.");
   // Set the display buffers
-  lv_display_set_buffers(disp, disp_draw_buf, disp_draw_buf2, bufSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  lv_display_set_buffers(disp, disp_draw_buf, NULL, bufSize, LV_DISPLAY_RENDER_MODE_FULL);
   Serial.println("Display buffers set.");
 
   ///////////////////////////
@@ -253,12 +248,14 @@ void setupLVGL()
   lv_scale_set_range(v_scale, 720, 0);
 
 #else
+
   /*Create a white label, set its text and align it to the center*/
   label1 = lv_label_create(lv_screen_active());
   lv_label_set_text(label1, "Hello world");
   lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0xffffff), LV_PART_MAIN);
   lv_obj_align(label1, LV_ALIGN_CENTER, 0, 0);
 #endif // LOCATE
+
 }
 
 // Make a request for data, response time is 25 ms currently
@@ -282,7 +279,7 @@ void data_request_timer_task(void *pvParameters)
       vTaskDelay(pdMS_TO_TICKS(DATA_REQUEST_INTERVAL)); // Delay for 1000 ms
       continue;
     }
-    
+
     int bytes_available = Serial2.available();
     // Recieve as much data as possible, but only a small chunk per iteration to avoid blocking
     if (bytes_available >= 3)
@@ -297,7 +294,7 @@ void data_request_timer_task(void *pvParameters)
         start_recvd = true;
       }
       // Read only a small chunk per iteration to avoid blocking
-      int chunk_size = 15; 
+      int chunk_size = 15;
       int bytes_to_read = bytes_available < chunk_size ? bytes_available : chunk_size;
       for (int i = 0; i < bytes_to_read; i++)
       {
@@ -316,7 +313,8 @@ void data_request_timer_task(void *pvParameters)
         continue;
       }
     }
-    else {
+    else
+    {
     }
     vTaskDelay(pdMS_TO_TICKS(1)); // Delay for 1 ms to wait for more data
   }
@@ -327,7 +325,7 @@ void display_update_task(void *pvParameters)
   uint32_t notifiedValue = 0;
   while (1)
   {
-    lv_timer_handler();           /* let the GUI do its work */
+    lv_timer_handler(); /* let the GUI do its work */
     // Check for notification
     if (xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, 0) == pdTRUE)
     {
@@ -335,7 +333,7 @@ void display_update_task(void *pvParameters)
       vTaskDelay(pdMS_TO_TICKS(4));
       continue;
     }
-    
+
     vTaskDelay(pdMS_TO_TICKS(5)); // Delay for 5 ms
   }
 }
