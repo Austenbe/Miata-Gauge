@@ -67,6 +67,7 @@ void data_request_timer_task(void *pvParameters);
 void display_update_task(void *pvParameters);
 void test_task(void *pvParameters);
 void my_lvgl_log_cb(lv_log_level_t level, const char *buf);
+void led_update(uint8_t *mode);
 
 #define SCREEN_WIDTH 720
 #define SCREEN_HEIGHT 720
@@ -118,7 +119,7 @@ unsigned long last_request_time = 0;
 
 // UI data variables
 char label1Text[32];
-uint16_t rpm = 0;
+uint16_t rpm = 4000;
 
 
 void setup(void)
@@ -270,14 +271,14 @@ void setupLVGL()
   /*Create a white label, set its text and align it to the center*/
   objects.label = lv_label_create(objects.screen);
   lv_label_set_text(objects.label, "Hello world");
-  lv_obj_set_style_text_color(objects.screen, lv_color_hex(0xffffff), LV_PART_MAIN);
+  lv_obj_set_style_text_color(objects.label, lv_color_hex(0xffffff), LV_PART_MAIN);
   lv_obj_align(objects.label, LV_ALIGN_CENTER, 0, 0);
 
     /*Create a white label, set its text and align it to the center*/
   objects.label_rpm = lv_label_create(objects.screen);
-  lv_label_set_text(objects.label, "rpm");
-  lv_obj_set_style_text_color(objects.screen, lv_color_hex(0xffffff), LV_PART_MAIN);
-  lv_obj_align(objects.label, LV_ALIGN_CENTER, 0, -100);
+  lv_label_set_text(objects.label_rpm, "rpm");
+  lv_obj_set_style_text_color(objects.label_rpm, lv_color_hex(0xffffff), LV_PART_MAIN);
+  lv_obj_align(objects.label_rpm, LV_ALIGN_CENTER, 0, -100);
 
   // Create LED ring
   {
@@ -292,7 +293,7 @@ void setupLVGL()
     lv_obj_t *obj = lv_led_create(objects.screen);
     lv_obj_set_pos(obj, 555, 113);
     lv_obj_set_size(obj, 32, 32);
-    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_color(obj, lv_color_hex(0xff00ff00));
     lv_led_set_brightness(obj, 80);
     objects.led1 = obj;
   }
@@ -300,7 +301,7 @@ void setupLVGL()
     lv_obj_t *obj = lv_led_create(objects.screen);
     lv_obj_set_pos(obj, 158, 82);
     lv_obj_set_size(obj, 32, 32);
-    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_color(obj, lv_color_hex(0xff00ff00));
     lv_led_set_brightness(obj, 80);
     objects.led2 = obj;
   }
@@ -308,7 +309,7 @@ void setupLVGL()
     lv_obj_t *obj = lv_led_create(objects.screen);
     lv_obj_set_pos(obj, 523, 82);
     lv_obj_set_size(obj, 32, 32);
-    lv_led_set_color(obj, lv_color_hex(0xff2aff00));
+    lv_led_set_color(obj, lv_color_hex(0xff00ff00));
     lv_led_set_brightness(obj, 80);
     objects.led3 = obj;
   }
@@ -316,25 +317,25 @@ void setupLVGL()
     lv_obj_t *obj = lv_led_create(objects.screen);
     lv_obj_set_pos(obj, 244, 34);
     lv_obj_set_size(obj, 32, 32);
-    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_color(obj, lv_color_hex(0xfffff400));
     lv_led_set_brightness(obj, 80);
-    objects.led4 = obj;
+    objects.led7 = obj;
   }
   {
     lv_obj_t *obj = lv_led_create(objects.screen);
     lv_obj_set_pos(obj, 437, 34);
     lv_obj_set_size(obj, 32, 32);
-    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_color(obj, lv_color_hex(0xffffff00));
     lv_led_set_brightness(obj, 80);
-    objects.led5 = obj;
+    objects.led6 = obj;
   }
   {
     lv_obj_t *obj = lv_led_create(objects.screen);
     lv_obj_set_pos(obj, 481, 55);
     lv_obj_set_size(obj, 32, 32);
-    lv_led_set_color(obj, lv_color_hex(0xffffe400));
+    lv_led_set_color(obj, lv_color_hex(0xffffff00));
     lv_led_set_brightness(obj, 80);
-    objects.led6 = obj;
+    objects.led4 = obj;
   }
   {
     lv_obj_t *obj = lv_led_create(objects.screen);
@@ -342,7 +343,7 @@ void setupLVGL()
     lv_obj_set_size(obj, 32, 32);
     lv_led_set_color(obj, lv_color_hex(0xffffe400));
     lv_led_set_brightness(obj, 80);
-    objects.led7 = obj;
+    objects.led5 = obj;
   }
   {
     lv_obj_t *obj = lv_led_create(objects.screen);
@@ -350,7 +351,7 @@ void setupLVGL()
     lv_obj_set_size(obj, 32, 32);
     lv_led_set_color(obj, lv_color_hex(0xffff0000));
     lv_led_set_brightness(obj, 80);
-    objects.led8 = obj;
+    objects.led10 = obj;
   }
   {
     lv_obj_t *obj = lv_led_create(objects.screen);
@@ -358,7 +359,7 @@ void setupLVGL()
     lv_obj_set_size(obj, 32, 32);
     lv_led_set_color(obj, lv_color_hex(0xffff0000));
     lv_led_set_brightness(obj, 80);
-    objects.led9 = obj;
+    objects.led8 = obj;
   }
   {
     lv_obj_t *obj = lv_led_create(objects.screen);
@@ -366,7 +367,7 @@ void setupLVGL()
     lv_obj_set_size(obj, 32, 32);
     lv_led_set_color(obj, lv_color_hex(0xffff0000));
     lv_led_set_brightness(obj, 80);
-    objects.led10 = obj;
+    objects.led9 = obj;
   }
 #endif // LOCATE
 }
@@ -426,9 +427,6 @@ void data_request_timer_task(void *pvParameters)
         continue;
       }
     }
-    else
-    {
-    }
     vTaskDelay(pdMS_TO_TICKS(1)); // Delay for 1 ms to wait for more data
   }
 }
@@ -436,6 +434,8 @@ void data_request_timer_task(void *pvParameters)
 void display_update_task(void *pvParameters)
 {
   uint32_t notifiedValue = 0;
+  uint8_t led_mode = 0;
+  unsigned long flash_start_time = 0;
   while (1)
   {
     lv_timer_handler(); /* let the GUI do its work */
@@ -444,11 +444,150 @@ void display_update_task(void *pvParameters)
     {
       lv_label_set_text_fmt(objects.label_rpm, "%d", rpm);
       lv_label_set_text_static(objects.label, label1Text);
+      // turn on/off LEDs
+      if (led_mode != 0 && rpm < 4500){
+        led_mode = 0;
+        led_update(&led_mode);
+      } else if (led_mode != 1 && rpm >= 4500 && rpm < 5000){
+        led_mode = 1;
+        led_update(&led_mode);
+      } else if (led_mode != 2 && rpm >= 5000 && rpm < 5500){
+        led_mode = 2;
+        led_update(&led_mode);
+      } else if (led_mode != 3 && rpm >= 5500 && rpm < 6000){
+        led_mode = 3;
+        led_update(&led_mode);
+      } else if (led_mode != 4 && rpm >= 6000 && rpm < 6500){
+        led_mode = 4;
+        led_update(&led_mode);
+      } else if (led_mode != 5 && rpm >= 6500 && rpm < 6900){
+        led_mode = 5;
+        led_update(&led_mode);
+      } else if (led_mode != 6 && rpm >= 6900){
+        led_mode = 6;
+        led_update(&led_mode);
+        flash_start_time = millis();
+      } else if (led_mode == 6){
+        // Flash all LEDs on and off at 5 Hz
+        if (millis() - flash_start_time >= 200){
+          led_update(&led_mode);
+          flash_start_time = millis();
+        }
+      }
       vTaskDelay(pdMS_TO_TICKS(4));
       continue;
     }
 
     vTaskDelay(pdMS_TO_TICKS(5)); // Delay for 5 ms
+  }
+}
+
+void led_update(uint8_t *mode)
+{
+  // All LEDs off
+  if (*mode == 0)
+  {
+    lv_led_off(objects.led0);
+    lv_led_off(objects.led1);
+    lv_led_off(objects.led2);
+    lv_led_off(objects.led3);
+    lv_led_off(objects.led4);
+    lv_led_off(objects.led5);
+    lv_led_off(objects.led6);
+    lv_led_off(objects.led7);
+    lv_led_off(objects.led8);
+    lv_led_off(objects.led9);
+    lv_led_off(objects.led10);
+  }
+  // 1st Green LEDs on
+  else if (*mode == 1)
+  {
+    lv_led_on(objects.led0);
+    lv_led_on(objects.led1);
+    lv_led_off(objects.led2);
+    lv_led_off(objects.led3);
+    lv_led_off(objects.led4);
+    lv_led_off(objects.led5);
+    lv_led_off(objects.led6);
+    lv_led_off(objects.led7);
+    lv_led_off(objects.led8);
+    lv_led_off(objects.led9);
+    lv_led_off(objects.led10);
+  }
+  // All Green LEDs on
+  else if (*mode == 2)
+  {
+    lv_led_on(objects.led0);
+    lv_led_on(objects.led1);
+    lv_led_on(objects.led2);
+    lv_led_on(objects.led3);
+    lv_led_off(objects.led4);
+    lv_led_off(objects.led5);
+    lv_led_off(objects.led6);
+    lv_led_off(objects.led7);
+    lv_led_off(objects.led8);
+    lv_led_off(objects.led9);
+    lv_led_off(objects.led10);
+  }
+  // 1st yellow LEDs on
+  else if (*mode == 3)
+  {
+    lv_led_on(objects.led0);
+    lv_led_on(objects.led1);
+    lv_led_on(objects.led2);
+    lv_led_on(objects.led3);
+    lv_led_on(objects.led4);
+    lv_led_on(objects.led5);
+    lv_led_off(objects.led6);
+    lv_led_off(objects.led7);
+    lv_led_off(objects.led8);
+    lv_led_off(objects.led9);
+    lv_led_off(objects.led10);
+  }
+  // All Yellow LEDs on
+  else if (*mode == 4)
+  {
+    lv_led_on(objects.led0);
+    lv_led_on(objects.led1);
+    lv_led_on(objects.led2);
+    lv_led_on(objects.led3);
+    lv_led_on(objects.led4);
+    lv_led_on(objects.led5);
+    lv_led_on(objects.led6);
+    lv_led_on(objects.led7);
+    lv_led_off(objects.led8);
+    lv_led_off(objects.led9);
+    lv_led_off(objects.led10);
+  }
+  // All Red LEDs on
+  else if (*mode == 5)
+  {
+    lv_led_on(objects.led0);
+    lv_led_on(objects.led1);
+    lv_led_on(objects.led2);
+    lv_led_on(objects.led3);
+    lv_led_on(objects.led4);
+    lv_led_on(objects.led5);
+    lv_led_on(objects.led6);
+    lv_led_on(objects.led7);
+    lv_led_on(objects.led8);
+    lv_led_on(objects.led9);
+    lv_led_on(objects.led10);
+  }
+  // Toggle all LEDs
+  else if (*mode == 6)
+  {
+    lv_led_toggle(objects.led0);
+    lv_led_toggle(objects.led1);
+    lv_led_toggle(objects.led2);
+    lv_led_toggle(objects.led3);
+    lv_led_toggle(objects.led4);
+    lv_led_toggle(objects.led5);
+    lv_led_toggle(objects.led6);
+    lv_led_toggle(objects.led7);
+    lv_led_toggle(objects.led8);
+    lv_led_toggle(objects.led9);
+    lv_led_toggle(objects.led10);
   }
 }
 
@@ -481,18 +620,18 @@ void test_task(void *pvParameters)
   bool rpmDir = true;
   while (1)
   {
-    if (rpm >= 7000)
+    if (rpm >= 7500)
     {
       rpmDir = false;
     }
-    else if (rpm <= 0)
+    else if (rpm <= 4000)
     {
       rpmDir = true;
     }
-    rpm = rpmDir ? rpm + 100 : rpm - 100;
+    rpm = rpmDir ? rpm + 10 : rpm - 10;
     snprintf(label1Text, sizeof(label1Text), "Time: %d", time++);
     xTaskNotify(displayTaskHandle, 1, eSetValueWithOverwrite);
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for 1 second
+    vTaskDelay(pdMS_TO_TICKS(30)); // Delay for 1 second
   }
 }
 #endif
