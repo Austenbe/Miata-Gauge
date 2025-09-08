@@ -40,6 +40,8 @@ It will take a couple itterations through bootsel/port to get the coms stabalize
 #include <Fonts/FreeSerifBold18pt7b.h>
 #include <Fonts/FreeSerifBold12pt7b.h>
 #include <Fonts/FreeSerifBold9pt7b.h>
+#include <demos/benchmark/lv_demo_benchmark.h>
+
 
 typedef struct _objects_t
 {
@@ -68,6 +70,7 @@ void display_update_task(void *pvParameters);
 void test_task(void *pvParameters);
 void my_lvgl_log_cb(lv_log_level_t level, const char *buf);
 void led_update(uint8_t *mode);
+void createUI();
 
 #define SCREEN_WIDTH 720
 #define SCREEN_HEIGHT 720
@@ -84,19 +87,19 @@ Arduino_ESP32RGBPanel *rgbpanel = new Arduino_ESP32RGBPanel(
     TFT_B1, TFT_B2, TFT_B3, TFT_B4, TFT_B5,
     1 /* hync_polarity */, 46 /* hsync_front_porch */, 2 /* hsync_pulse_width */, 44 /* hsync_back_porch */,
     1 /* vsync_polarity */, 50 /* vsync_front_porch */, 16 /* vsync_pulse_width */, 16 /* vsync_back_porch */,
-    1, 12000000L /* DCLK */
+    1, 16000000L /* DCLK */
 );
 
 Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
     SCREEN_WIDTH /* width */, SCREEN_HEIGHT /* height */, rgbpanel, 0 /* rotation */, true /* auto_flush */,
     expander, GFX_NOT_DEFINED /* RST */, hd40015c40_init_operations, sizeof(hd40015c40_init_operations));
 
+
 lv_display_t *disp;
 objects_t objects;
 uint8_t *disp_draw_buf;
 uint8_t *disp_draw_buf2;
-uint32_t screen_size = SCREEN_WIDTH * SCREEN_HEIGHT;
-uint32_t bufSize = screen_size * 2; // size of the display buffer in pixels
+uint32_t bufSize = SCREEN_WIDTH * 90 * 2; // size of the display buffer in pixels
 
 /*******************************************************************************
  * End of Arduino_GFX and LVGL setting
@@ -121,9 +124,9 @@ unsigned long last_request_time = 0;
 char label1Text[32];
 uint16_t rpm = 4000;
 
-
 void setup(void)
 {
+
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, A0, A1);
   Serial2.setTimeout(5);
@@ -153,13 +156,12 @@ void setup(void)
   Serial.println("LV init.");
   setupLVGL();
 
-  printf("LVGL stride = %d\n", lv_display_get_horizontal_resolution(disp));
-  printf("LVGL height = %d\n", lv_display_get_vertical_resolution(disp));
-  printf("Buf size = %d\n", bufSize);
-
   // Create Screen task
+
   xTaskCreatePinnedToCore(display_update_task, "displayTask", 4096, NULL, 4, &displayTaskHandle, 1);
   Serial.println("Created Screen update task.");
+
+  /*
 
 // Setup data request task
 #ifdef TESTING
@@ -169,11 +171,17 @@ void setup(void)
 #endif
   Serial.println("Created data request task.");
 
+  */
+
   Serial.println("Setup done.");
+  Serial.printf("Free internal heap: %u\n", esp_get_free_internal_heap_size());
+
+  lv_demo_benchmark();
 }
 
 void loop()
 {
+
 }
 
 void setupLVGL()
@@ -196,11 +204,11 @@ void setupLVGL()
   Serial.println("Display Created.");
 
   // Allocate the display buffer
-  disp_draw_buf = (uint8_t *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-  // disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  disp_draw_buf = (uint8_t *)heap_caps_malloc(bufSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!disp_draw_buf)
   {
     // remove MALLOC_CAP_INTERNAL flag try again
+    Serial.println("Retrying disp_draw_buf allocate without MALLOC_CAP_INTERNAL");
     disp_draw_buf = (uint8_t *)heap_caps_malloc(bufSize, MALLOC_CAP_8BIT);
   }
   if (!disp_draw_buf)
@@ -209,25 +217,33 @@ void setupLVGL()
     return;
   }
   /*
+  disp_draw_buf2 = (uint8_t *)heap_caps_malloc(bufSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!disp_draw_buf2)
   {
     // remove MALLOC_CAP_INTERNAL flag try again
-    disp_draw_buf2 = (lv_color_t *)heap_caps_malloc(bufSize * sizeof(lv_color_t), MALLOC_CAP_8BIT);
+    disp_draw_buf2 = (uint8_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_8BIT);
   }
   if (!disp_draw_buf2)
   {
     Serial.println("LVGL disp_draw_buf2 allocate failed!");
     return;
   }
+
   */
   Serial.println("Display buffers allocated.");
   // Set the display buffers
-  lv_display_set_buffers(disp, disp_draw_buf, NULL, bufSize, LV_DISPLAY_RENDER_MODE_FULL);
+  lv_display_set_buffers(disp, disp_draw_buf, NULL, bufSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
   Serial.println("Display buffers set.");
+
+  //createUI();
+}
+
 
   ///////////////////////////
   // Setup Screen Elements //
   ///////////////////////////
+void createUI()
+{
   objects.screen = lv_screen_active();
   // Set background color
   lv_obj_set_style_bg_color(objects.screen, lv_color_hex(0xff171b18), LV_PART_MAIN);
@@ -274,7 +290,7 @@ void setupLVGL()
   lv_obj_set_style_text_color(objects.label, lv_color_hex(0xffffff), LV_PART_MAIN);
   lv_obj_align(objects.label, LV_ALIGN_CENTER, 0, 0);
 
-    /*Create a white label, set its text and align it to the center*/
+  /*Create a white label, set its text and align it to the center*/
   objects.label_rpm = lv_label_create(objects.screen);
   lv_label_set_text(objects.label_rpm, "rpm");
   lv_obj_set_style_text_color(objects.label_rpm, lv_color_hex(0xffffff), LV_PART_MAIN);
@@ -445,31 +461,47 @@ void display_update_task(void *pvParameters)
       lv_label_set_text_fmt(objects.label_rpm, "%d", rpm);
       lv_label_set_text_static(objects.label, label1Text);
       // turn on/off LEDs
-      if (led_mode != 0 && rpm < 4500){
+      if (led_mode != 0 && rpm < 4500)
+      {
         led_mode = 0;
         led_update(&led_mode);
-      } else if (led_mode != 1 && rpm >= 4500 && rpm < 5000){
+      }
+      else if (led_mode != 1 && rpm >= 4500 && rpm < 5000)
+      {
         led_mode = 1;
         led_update(&led_mode);
-      } else if (led_mode != 2 && rpm >= 5000 && rpm < 5500){
+      }
+      else if (led_mode != 2 && rpm >= 5000 && rpm < 5500)
+      {
         led_mode = 2;
         led_update(&led_mode);
-      } else if (led_mode != 3 && rpm >= 5500 && rpm < 6000){
+      }
+      else if (led_mode != 3 && rpm >= 5500 && rpm < 6000)
+      {
         led_mode = 3;
         led_update(&led_mode);
-      } else if (led_mode != 4 && rpm >= 6000 && rpm < 6500){
+      }
+      else if (led_mode != 4 && rpm >= 6000 && rpm < 6500)
+      {
         led_mode = 4;
         led_update(&led_mode);
-      } else if (led_mode != 5 && rpm >= 6500 && rpm < 6900){
+      }
+      else if (led_mode != 5 && rpm >= 6500 && rpm < 6900)
+      {
         led_mode = 5;
         led_update(&led_mode);
-      } else if (led_mode != 6 && rpm >= 6900){
+      }
+      else if (led_mode != 6 && rpm >= 6900)
+      {
         led_mode = 6;
         led_update(&led_mode);
         flash_start_time = millis();
-      } else if (led_mode == 6){
+      }
+      else if (led_mode == 6)
+      {
         // Flash all LEDs on and off at 5 Hz
-        if (millis() - flash_start_time >= 200){
+        if (millis() - flash_start_time >= 200)
+        {
           led_update(&led_mode);
           flash_start_time = millis();
         }
